@@ -17,10 +17,14 @@ using namespace cv;
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
 
-double FOCAL_X = 616.9788256385079;
-double FOCAL_Y = 618.2612204459588;
-double CENTER_X = 319.6980207838996;
-double CENTER_Y = 237.2675723659526;
+//double FOCAL_X = 616.9788256385079;
+//double FOCAL_Y = 618.2612204459588;
+//double CENTER_X = 319.6980207838996;
+//double CENTER_Y = 237.2675723659526;
+double FOCAL_X = 595.171;
+double FOCAL_Y = 595.171;
+double CENTER_X = 311.823;
+double CENTER_Y = 250.501;
 double MM_PER_M = 1000;
 int WIDTH = 640;
 int HEIGHT = 480;
@@ -101,17 +105,20 @@ void convert_to_pointclouds(PointCloudT &pointcloud, cv::Mat rgb_img, cv::Mat de
 
 	for (int i = 0; i < rgb_img.rows; i++) {
 		for (int j = 0; j < rgb_img.cols; j++) {
-			unsigned short depth = depth_img.at<unsigned short>(i, j);
+			double depth = double(depth_img.at<unsigned short>(i, j));
+			//depth = 100;
 			if (depth != 0 && depth / MM_PER_M < MAX_DEPTH_THRESHOLD && depth / MM_PER_M > MIN_DEPTH_THRESHOLD) {
 				Mat camPoint = Mat::zeros(3, 1, CV_64FC1);
 				camPoint.at<double>(0, 0) = (j - CENTER_X) * depth / FOCAL_X / MM_PER_M;
-				camPoint.at<double>(1, 0) = -(i - CENTER_Y) * depth / FOCAL_Y / MM_PER_M;
+				camPoint.at<double>(1, 0) = (i - CENTER_Y) * depth / FOCAL_Y / MM_PER_M;
 				camPoint.at<double>(2, 0) = double(depth) / MM_PER_M;
 
 				// Mat worldPoint = rot_mat * camPoint - rot_mat.t() * trans_mat;
 				// Mat worldPoint = rot_mat * camPoint + rot_mat.t() * trans_mat;
-				// Mat worldPoint = camPoint + rot_mat.t() * trans_mat;
+				 //Mat worldPoint = camPoint + rot_mat.t() * trans_mat;
+				//Mat worldPoint = rot_mat.t() * camPoint - trans_mat;
 				Mat worldPoint = rot_mat * camPoint + trans_mat;
+				//Mat worldPoint = camPoint;
 
 				PointT point;
 				point.x = worldPoint.at<double>(0, 0);
@@ -176,6 +183,7 @@ int main(int argc,	char* argv[])
 	int i = 0;
 
 	time.tic();
+	Mat last_rot;
 	while (!index.eof()) {
 		string img_path;
 		index >> img_path;
@@ -196,14 +204,21 @@ int main(int argc,	char* argv[])
 		undistort(color, color_u, cam_mat, dist_mat);
 		undistort(depth, depth_u, cam_mat, dist_mat);
 
-		if (i == 0) {
-			convert_to_pointclouds(*cloud_in, color_u, depth_u, rot, trans);
-		}
-		else if (i == 1) {
-			convert_to_pointclouds(*cloud_icp, color_u, depth_u, rot, trans);
-		} else if (i >= 1) {
-			break;
-		}
+		cout << "i = " << i << endl;
+		cout << "rot " << rot << endl;
+		convert_to_pointclouds(*cloud_in, color_u, depth_u, rot, trans);
+		//if (i == 0) {
+		//	convert_to_pointclouds(*cloud_in, color_u, depth_u, rot, trans);
+		//	last_rot = rot;
+		//}
+		//else if (i == 1) {
+		//	convert_to_pointclouds(*cloud_icp, color_u, depth_u, rot, trans);
+		//	cout << "last_rot * rot" << endl;
+		//	Mat a = last_rot.t() * rot;
+		//	cout << a << endl;
+		//} else if (i >= 1) {
+		//	break;
+		//}
 		i++;
 	}
 	std::cout << "Loading data and convert to clouds in " << time.toc() << " ms" << std::endl;
@@ -214,11 +229,13 @@ int main(int argc,	char* argv[])
 	//*cloud_icp = *noiseFiltering(cloud_icp);
 	//std::cout << "Applied noise filtering in " << time.toc() << " ms" << std::endl;
 
+	*cloud_icp = *cloud_in;
+
 	*cloud_tr = *cloud_icp;  // We backup cloud_icp into cloud_tr for later use
 
 	// The Iterative Closest Point algorithm
 	time.tic();
-	int iterations = 10;  // Default number of ICP iterations
+	int iterations = 1;  // Default number of ICP iterations
 	double correspondenceDistance = 0.008;
 	double rejectionThreshold = 0.004;
 
@@ -233,7 +250,7 @@ int main(int argc,	char* argv[])
 	icp.setMaximumIterations(iterations); // for the next time we will call .align () function
 	//icp.setMaxCorrespondenceDistance(correspondenceDistance);
 	//icp.setTransformationEpsilon(1e-4);
-	//icp.setEuclideanFitnessEpsilon(1e-6);
+	//icp.setTransformationEpsilon(1e-6);
 	//icp.setRANSACOutlierRejectionThreshold(rejectionThreshold);
 	icp.setInputSource(down_src);
 	icp.setInputTarget(down_target);
@@ -272,10 +289,12 @@ int main(int argc,	char* argv[])
 	// Original point cloud is white
 	pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_in_color_h(cloud_in, (int)255 * txt_gray_lvl, (int)255 * txt_gray_lvl,
 		(int)255 * txt_gray_lvl);
-	viewer.addPointCloud(cloud_in, cloud_in_color_h, "cloud_in_v1", v1);
+	//viewer.addPointCloud(cloud_in, cloud_in_color_h, "cloud_in_v1", v1);
+	viewer.addPointCloud(cloud_in, "cloud_in_v1", v1);
 	// Transformed point cloud is green
 	pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_tr_color_h(cloud_tr, 20, 180, 20);
-	viewer.addPointCloud(cloud_tr, cloud_tr_color_h, "cloud_tr_v1", v1);
+	//viewer.addPointCloud(cloud_tr, cloud_tr_color_h, "cloud_tr_v1", v1);
+	viewer.addPointCloud(cloud_tr, "cloud_tr_v1", v1);
 
 	viewer.addPointCloud(cloud_in, "cloud_in_v2", v2);
 	viewer.addPointCloud(cloud_icp, "cloud_icp_v2", v2);
