@@ -28,8 +28,8 @@ double CENTER_Y = 250.501;
 double MM_PER_M = 1000;
 int WIDTH = 640;
 int HEIGHT = 480;
-double MAX_DEPTH_THRESHOLD = 1.2;
-double MIN_DEPTH_THRESHOLD = 0.0;
+double MAX_DEPTH_THRESHOLD = 0.6;
+double MIN_DEPTH_THRESHOLD = 0.2;
 
 bool next_iteration = false;
 
@@ -246,41 +246,41 @@ int main(int argc,	char* argv[])
 	//*cloud_icp = *down_src;
 	//*cloud_in = *down_target;
 
-	pcl::IterativeClosestPoint<PointT, PointT> icp;
-	icp.setMaximumIterations(iterations); // for the next time we will call .align () function
+	//pcl::IterativeClosestPoint<PointT, PointT> icp;
+	//icp.setMaximumIterations(iterations); // for the next time we will call .align () function
 	//icp.setMaxCorrespondenceDistance(correspondenceDistance);
 	//icp.setTransformationEpsilon(1e-4);
 	//icp.setTransformationEpsilon(1e-6);
 	//icp.setRANSACOutlierRejectionThreshold(rejectionThreshold);
-	icp.setInputSource(down_src);
-	icp.setInputTarget(down_target);
-	icp.align(*down_src);
+	//icp.setInputSource(down_src);
+	//icp.setInputTarget(down_target);
+	//icp.align(*down_src);
 
 	std::cout << "Applied " << iterations << " ICP iteration(s) in " << time.toc() << " ms" << std::endl;
 
 	Eigen::Matrix4d transformation_matrix = Eigen::Matrix4d::Identity();
-	if (icp.hasConverged())
-	{
-		std::cout << "\nICP has converged, score is " << icp.getFitnessScore() << std::endl;
-		std::cout << "\nICP transformation " << iterations << " : cloud_icp -> cloud_in" << std::endl;
-		transformation_matrix = icp.getFinalTransformation().cast<double>();
-		print4x4Matrix(transformation_matrix);
+	//if (icp.hasConverged())
+	//{
+	//	std::cout << "\nICP has converged, score is " << icp.getFitnessScore() << std::endl;
+	//	std::cout << "\nICP transformation " << iterations << " : cloud_icp -> cloud_in" << std::endl;
+	//	transformation_matrix = icp.getFinalTransformation().cast<double>();
+	//	print4x4Matrix(transformation_matrix);
 
-		pcl::transformPointCloud(*cloud_icp, *cloud_icp, icp.getFinalTransformation());
-	}
-	else
-	{
-		PCL_ERROR("\nICP has not converged.\n");
-		return (-1);
-	}
+	//	pcl::transformPointCloud(*cloud_icp, *cloud_icp, icp.getFinalTransformation());
+	//}
+	//else
+	//{
+	//	PCL_ERROR("\nICP has not converged.\n");
+	//	return (-1);
+	//}
 
 	// Visualization
 	pcl::visualization::PCLVisualizer viewer("ICP demo");
 	// Create two verticaly separated viewports
 	int v1(0);
 	int v2(1);
-	viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
-	viewer.createViewPort(0.5, 0.0, 1.0, 1.0, v2);
+	//viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
+	//viewer.createViewPort(0.5, 0.0, 1.0, 1.0, v2);
 
 	// The color we will be using
 	float bckgr_gray_level = 0.0;  // Black
@@ -290,26 +290,27 @@ int main(int argc,	char* argv[])
 	pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_in_color_h(cloud_in, (int)255 * txt_gray_lvl, (int)255 * txt_gray_lvl,
 		(int)255 * txt_gray_lvl);
 	//viewer.addPointCloud(cloud_in, cloud_in_color_h, "cloud_in_v1", v1);
-	viewer.addPointCloud(cloud_in, "cloud_in_v1", v1);
+	//viewer.addPointCloud(cloud_in, "cloud_in_v1", v1);
+	viewer.addPointCloud(cloud_in, "cloud_in_v1");
 	// Transformed point cloud is green
 	pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_tr_color_h(cloud_tr, 20, 180, 20);
 	//viewer.addPointCloud(cloud_tr, cloud_tr_color_h, "cloud_tr_v1", v1);
-	viewer.addPointCloud(cloud_tr, "cloud_tr_v1", v1);
+	//viewer.addPointCloud(cloud_tr, "cloud_tr_v1", v1);
 
-	viewer.addPointCloud(cloud_in, "cloud_in_v2", v2);
-	viewer.addPointCloud(cloud_icp, "cloud_icp_v2", v2);
+	//viewer.addPointCloud(cloud_in, "cloud_in_v2", v2);
+	//viewer.addPointCloud(cloud_icp, "cloud_icp_v2", v2);
 
 	// Adding text descriptions in each viewport
-	viewer.addText("White: Original point cloud\nGreen: Matrix transformed point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_1", v1);
+	//viewer.addText("White: Original point cloud\nGreen: Matrix transformed point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_1", v1);
 
-	std::stringstream ss;
-	ss << iterations;
-	std::string iterations_cnt = "ICP iterations = " + ss.str();
-	viewer.addText(iterations_cnt, 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "iterations_cnt", v2);
+	//std::stringstream ss;
+	//ss << iterations;
+	//std::string iterations_cnt = "ICP iterations = " + ss.str();
+	//viewer.addText(iterations_cnt, 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "iterations_cnt", v2);
 
-	// Set background color
-	viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v1);
-	viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v2);
+	//// Set background color
+	//viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v1);
+	//viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v2);
 
 	// Set camera position and orientation
 	viewer.setCameraPosition(-3.68332, 2.94092, 5.71266, 0.289847, 0.921947, -0.256907, 0);
@@ -323,35 +324,35 @@ int main(int argc,	char* argv[])
 	{
 		viewer.spinOnce();
 
-		// The user pressed "space" :
-		if (next_iteration)
-		{
-			// The Iterative Closest Point algorithm
-			time.tic();
-			icp.align(*down_src);
-			std::cout << "Applied 1 ICP iteration in " << time.toc() << " ms" << std::endl;
-			pcl::transformPointCloud(*cloud_icp, *cloud_icp, icp.getFinalTransformation());
+		//// The user pressed "space" :
+		//if (next_iteration)
+		//{
+		//	// The Iterative Closest Point algorithm
+		//	time.tic();
+		//	icp.align(*down_src);
+		//	std::cout << "Applied 1 ICP iteration in " << time.toc() << " ms" << std::endl;
+		//	pcl::transformPointCloud(*cloud_icp, *cloud_icp, icp.getFinalTransformation());
 
-			if (icp.hasConverged())
-			{
-				printf("\nICP has converged, score is %+.0e\n", icp.getFitnessScore());
-				std::cout << "\nICP transformation " << ++iterations << " : cloud_icp -> cloud_in" << std::endl;
-				transformation_matrix *= icp.getFinalTransformation().cast<double>();  // WARNING /!\ This is not accurate! For "educational" purpose only!
-				print4x4Matrix(transformation_matrix);  // Print the transformation between original pose and current pose
+		//	if (icp.hasConverged())
+		//	{
+		//		printf("\nICP has converged, score is %+.0e\n", icp.getFitnessScore());
+		//		std::cout << "\nICP transformation " << ++iterations << " : cloud_icp -> cloud_in" << std::endl;
+		//		transformation_matrix *= icp.getFinalTransformation().cast<double>();  // WARNING /!\ This is not accurate! For "educational" purpose only!
+		//		print4x4Matrix(transformation_matrix);  // Print the transformation between original pose and current pose
 
-				ss.str("");
-				ss << iterations;
-				std::string iterations_cnt = "ICP iterations = " + ss.str();
-				viewer.updateText(iterations_cnt, 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "iterations_cnt");
-				viewer.updatePointCloud(cloud_icp, "cloud_icp_v2");
-			}
-			else
-			{
-				PCL_ERROR("\nICP has not converged.\n");
-				return (-1);
-			}
-		}
-		next_iteration = false;
+		//		ss.str("");
+		//		ss << iterations;
+		//		std::string iterations_cnt = "ICP iterations = " + ss.str();
+		//		viewer.updateText(iterations_cnt, 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "iterations_cnt");
+		//		viewer.updatePointCloud(cloud_icp, "cloud_icp_v2");
+		//	}
+		//	else
+		//	{
+		//		PCL_ERROR("\nICP has not converged.\n");
+		//		return (-1);
+		//	}
+		//}
+		//next_iteration = false;
 	}
 	return (0);
 }
