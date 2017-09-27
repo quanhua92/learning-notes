@@ -10,6 +10,8 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/filters/passthrough.h>
 
 using namespace std;
 using namespace cv;
@@ -21,15 +23,19 @@ typedef pcl::PointCloud<PointT> PointCloudT;
 //double FOCAL_Y = 618.2612204459588;
 //double CENTER_X = 319.6980207838996;
 //double CENTER_Y = 237.2675723659526;
-double FOCAL_X = 595.171;
-double FOCAL_Y = 595.171;
-double CENTER_X = 311.823;
-double CENTER_Y = 250.501;
+//double FOCAL_X = 595.171;
+//double FOCAL_Y = 595.171;
+//double CENTER_X = 311.823;
+//double CENTER_Y = 250.501;
+double FOCAL_X = 603.9133550935715;
+double FOCAL_Y = 599.7920816123911;
+double CENTER_X = 325.771848677865;
+double CENTER_Y = 226.4656848780276;
 double MM_PER_M = 1000;
 int WIDTH = 640;
 int HEIGHT = 480;
-double MAX_DEPTH_THRESHOLD = 0.6;
-double MIN_DEPTH_THRESHOLD = 0.2;
+double MAX_DEPTH_THRESHOLD = 1.6;
+double MIN_DEPTH_THRESHOLD = 0.0;
 
 bool next_iteration = false;
 
@@ -138,9 +144,8 @@ void convert_to_pointclouds(PointCloudT &pointcloud, cv::Mat rgb_img, cv::Mat de
 	pointcloud.height = 1;
 }
 
-PointCloudT::Ptr downsampleCloud(PointCloudT::Ptr inputCloud)
+PointCloudT::Ptr downsampleCloud(PointCloudT::Ptr inputCloud, double voxel_size= 0.01)
 {
-	const double voxel_size = 0.01;
 	PointCloudT::Ptr cloud_filtered(new PointCloudT);
 	pcl::VoxelGrid<PointT> downsampler;
 	downsampler.setInputCloud(inputCloud);
@@ -182,8 +187,9 @@ int main(int argc,	char* argv[])
 	ifstream index(string(ROOT_DIR + "input.txt").c_str());
 	int i = 0;
 
+	bool perform_icp = false;
+
 	time.tic();
-	Mat last_rot;
 	while (!index.eof()) {
 		string img_path;
 		index >> img_path;
@@ -200,117 +206,125 @@ int main(int argc,	char* argv[])
 		depth = matread(depth_path);
 		rot = matread(rot_path);
 		trans = matread(trans_path);
-		Mat color_u, depth_u;
-		undistort(color, color_u, cam_mat, dist_mat);
-		undistort(depth, depth_u, cam_mat, dist_mat);
 
 		cout << "i = " << i << endl;
 		cout << "rot " << rot << endl;
-		convert_to_pointclouds(*cloud_in, color_u, depth_u, rot, trans);
-		//if (i == 0) {
-		//	convert_to_pointclouds(*cloud_in, color_u, depth_u, rot, trans);
-		//	last_rot = rot;
-		//}
-		//else if (i == 1) {
-		//	convert_to_pointclouds(*cloud_icp, color_u, depth_u, rot, trans);
-		//	cout << "last_rot * rot" << endl;
-		//	Mat a = last_rot.t() * rot;
-		//	cout << a << endl;
-		//} else if (i >= 1) {
-		//	break;
-		//}
+
+		if (perform_icp) {
+			if (i == 0) {
+				convert_to_pointclouds(*cloud_in, color, depth, rot, trans);
+			}
+			else if (i == 1) {
+				convert_to_pointclouds(*cloud_icp, color, depth, rot, trans);
+				break;
+			} else if (i > 1) {
+				break;
+			}
+		}
+		else {
+			convert_to_pointclouds(*cloud_in, color, depth, rot, trans);
+		}
 		i++;
 	}
 	std::cout << "Loading data and convert to clouds in " << time.toc() << " ms" << std::endl;
+	if (perform_icp) {
+		// filter to remove the box
+		PointCloudT::Ptr extracted_cloud(new PointCloudT());
+		pcl::PassThrough<PointT> pass;
+		pass.setInputCloud(cloud_in);
+		pass.setFilterFieldName("z");
+		pass.setFilterLimits(-0.03, 1); // 0.1: 10cm
+		pass.filter(*cloud_in);
 
-	// Radius filtering
+		pass.setInputCloud(cloud_icp);
+		pass.filter(*cloud_icp);
+	}
+
+	// Save to ROOT_DIR\model.pcd
 	//time.tic();
-	//*cloud_in = *noiseFiltering(cloud_in);
-	//*cloud_icp = *noiseFiltering(cloud_icp);
-	//std::cout << "Applied noise filtering in " << time.toc() << " ms" << std::endl;
+	//pcl::io::savePCDFileASCII(ROOT_DIR + "model.pcd", *cloud_in);
+	//std::cout << "Save model (" << cloud_in->points.size() << " points) to " << ROOT_DIR + "model.pcd in " << time.toc() << " ms" << std::endl;
 
-	*cloud_icp = *cloud_in;
+	//time.tic();
+	PointCloudT::Ptr cloud_down = downsampleCloud(cloud_in, 0.002);
+	pcl::io::savePCDFileASCII(ROOT_DIR + "model_down.pcd", *cloud_down);
+	std::cout << "Save down-sampled model (" << cloud_down->points.size() << " points) to " << ROOT_DIR + "model.pcd in " << time.toc() << " ms" << std::endl;
 
-	*cloud_tr = *cloud_icp;  // We backup cloud_icp into cloud_tr for later use
+	//*cloud_in = *cloud_down; // visualize down sampled points
 
-	// The Iterative Closest Point algorithm
-	time.tic();
-	int iterations = 1;  // Default number of ICP iterations
-	double correspondenceDistance = 0.008;
-	double rejectionThreshold = 0.004;
+	if (perform_icp) {
+		// Radius filtering
+		// time.tic();
+		//*cloud_in = *noiseFiltering(cloud_in);
+		//*cloud_icp = *noiseFiltering(cloud_icp);
+		//std::cout << "Applied noise filtering in " << time.toc() << " ms" << std::endl;
 
-	PointCloudT::Ptr down_src = downsampleCloud(cloud_icp);
-	PointCloudT::Ptr down_target = downsampleCloud(cloud_in);
+		*cloud_tr = *cloud_icp;  // We backup cloud_icp into cloud_tr for later use
 
-	// view voxel
-	//*cloud_icp = *down_src;
-	//*cloud_in = *down_target;
+		 // The Iterative Closest Point algorithm
+		time.tic();
+		int iterations = 2000;  // Default number of ICP iterations
 
-	//pcl::IterativeClosestPoint<PointT, PointT> icp;
-	//icp.setMaximumIterations(iterations); // for the next time we will call .align () function
-	//icp.setMaxCorrespondenceDistance(correspondenceDistance);
-	//icp.setTransformationEpsilon(1e-4);
-	//icp.setTransformationEpsilon(1e-6);
-	//icp.setRANSACOutlierRejectionThreshold(rejectionThreshold);
-	//icp.setInputSource(down_src);
-	//icp.setInputTarget(down_target);
-	//icp.align(*down_src);
+		PointCloudT::Ptr down_src = downsampleCloud(cloud_icp);
+		PointCloudT::Ptr down_target = downsampleCloud(cloud_in);
 
-	std::cout << "Applied " << iterations << " ICP iteration(s) in " << time.toc() << " ms" << std::endl;
+		pcl::IterativeClosestPoint<PointT, PointT> icp;
+		icp.setMaximumIterations(iterations); // for the next time we will call .align () function
+		icp.setEuclideanFitnessEpsilon(1e-10);
+		icp.setInputSource(down_src);
+		icp.setInputTarget(down_target);
+		icp.align(*down_src);
 
-	Eigen::Matrix4d transformation_matrix = Eigen::Matrix4d::Identity();
-	//if (icp.hasConverged())
-	//{
-	//	std::cout << "\nICP has converged, score is " << icp.getFitnessScore() << std::endl;
-	//	std::cout << "\nICP transformation " << iterations << " : cloud_icp -> cloud_in" << std::endl;
-	//	transformation_matrix = icp.getFinalTransformation().cast<double>();
-	//	print4x4Matrix(transformation_matrix);
+		std::cout << "Applied " << iterations << " ICP iteration(s) in " << time.toc() << " ms" << std::endl;
 
-	//	pcl::transformPointCloud(*cloud_icp, *cloud_icp, icp.getFinalTransformation());
-	//}
-	//else
-	//{
-	//	PCL_ERROR("\nICP has not converged.\n");
-	//	return (-1);
-	//}
+
+		Eigen::Matrix4d transformation_matrix = Eigen::Matrix4d::Identity();
+		if (icp.hasConverged())
+		{
+			std::cout << "\nICP has converged, score is " << icp.getFitnessScore() << std::endl;
+			std::cout << "\nICP transformation " << iterations << " : cloud_icp -> cloud_in" << std::endl;
+			transformation_matrix = icp.getFinalTransformation().cast<double>();
+			print4x4Matrix(transformation_matrix);
+
+			pcl::transformPointCloud(*cloud_icp, *cloud_icp, icp.getFinalTransformation());
+		}
+		else
+		{
+			PCL_ERROR("\nICP has not converged.\n");
+			return (-1);
+		}
+		
+	}
 
 	// Visualization
 	pcl::visualization::PCLVisualizer viewer("ICP demo");
 	// Create two verticaly separated viewports
 	int v1(0);
 	int v2(1);
-	//viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
-	//viewer.createViewPort(0.5, 0.0, 1.0, 1.0, v2);
+	viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
+	viewer.createViewPort(0.5, 0.0, 1.0, 1.0, v2);
 
 	// The color we will be using
 	float bckgr_gray_level = 0.0;  // Black
 	float txt_gray_lvl = 1.0 - bckgr_gray_level;
 
 	// Original point cloud is white
-	pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_in_color_h(cloud_in, (int)255 * txt_gray_lvl, (int)255 * txt_gray_lvl,
-		(int)255 * txt_gray_lvl);
-	//viewer.addPointCloud(cloud_in, cloud_in_color_h, "cloud_in_v1", v1);
-	//viewer.addPointCloud(cloud_in, "cloud_in_v1", v1);
-	viewer.addPointCloud(cloud_in, "cloud_in_v1");
-	// Transformed point cloud is green
-	pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_tr_color_h(cloud_tr, 20, 180, 20);
-	//viewer.addPointCloud(cloud_tr, cloud_tr_color_h, "cloud_tr_v1", v1);
-	//viewer.addPointCloud(cloud_tr, "cloud_tr_v1", v1);
+	if (perform_icp) {
+		pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_in_color_h(cloud_in, (int)255 * txt_gray_lvl, (int)255 * txt_gray_lvl,
+			(int)255 * txt_gray_lvl);
+		//viewer.addPointCloud(cloud_in, cloud_in_color_h, "cloud_in_v1", v1);
+		viewer.addPointCloud(cloud_in, "cloud_in_v1", v1);
 
-	//viewer.addPointCloud(cloud_in, "cloud_in_v2", v2);
-	//viewer.addPointCloud(cloud_icp, "cloud_icp_v2", v2);
+		pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_tr_color_h(cloud_tr, 20, 180, 20);
+		//viewer.addPointCloud(cloud_tr, cloud_tr_color_h, "cloud_tr_v1", v1);
+		viewer.addPointCloud(cloud_tr, "cloud_tr_v1", v1);
 
-	// Adding text descriptions in each viewport
-	//viewer.addText("White: Original point cloud\nGreen: Matrix transformed point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_1", v1);
-
-	//std::stringstream ss;
-	//ss << iterations;
-	//std::string iterations_cnt = "ICP iterations = " + ss.str();
-	//viewer.addText(iterations_cnt, 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "iterations_cnt", v2);
-
-	//// Set background color
-	//viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v1);
-	//viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v2);
+		viewer.addPointCloud(cloud_in, "cloud_in_v2", v2);
+		viewer.addPointCloud(cloud_icp, "cloud_icp_v2", v2);
+	}
+	else {
+		viewer.addPointCloud(cloud_in, "cloud_in_v1", v1);
+	}
 
 	// Set camera position and orientation
 	viewer.setCameraPosition(-3.68332, 2.94092, 5.71266, 0.289847, 0.921947, -0.256907, 0);
@@ -318,6 +332,7 @@ int main(int argc,	char* argv[])
 
 	// Register keyboard callback :
 	viewer.registerKeyboardCallback(&keyboardEventOccurred, (void*)NULL);
+	viewer.addCoordinateSystem(1.0, "cloud", 0);
 
 	// Display the visualiser
 	while (!viewer.wasStopped())
