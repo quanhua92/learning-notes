@@ -6,6 +6,8 @@
 #include <pcl/registration/icp.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/console/time.h>   // TicToc
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
 
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
@@ -30,6 +32,17 @@ keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event,
 	if (event.getKeySym() == "space" && event.keyDown())
 		next_iteration = true;
 }
+
+PointCloudT::Ptr downsampleCloud(PointCloudT::Ptr inputCloud, double voxel_size)
+{
+	PointCloudT::Ptr cloud_filtered(new PointCloudT);
+	pcl::VoxelGrid<PointT> downsampler;
+	downsampler.setInputCloud(inputCloud);
+	downsampler.setLeafSize(voxel_size, voxel_size, voxel_size);
+	downsampler.filter(*cloud_filtered);
+	return cloud_filtered;
+}
+
 
 int
 main(int argc,
@@ -70,26 +83,56 @@ main(int argc,
 	}
 	std::cout << "\nLoaded file " << argv[1] << " (" << cloud_in->size() << " points) in " << time.toc() << " ms\n" << std::endl;
 
-	// Defining a rotation matrix and translation vector
+	pcl::io::loadPCDFile("C:\\data\\model_mana_05_10.pcd", *cloud_icp);
+
+	// remove the bottom of the model
+	PointCloudT::Ptr extracted_cloud(new PointCloudT());
+	pcl::PassThrough<PointT> pass;
+	pass.setInputCloud(cloud_in);
+	pass.setFilterFieldName("z");
+	pass.setFilterLimits(0.05, 0.9); //  0.1 = 10cm // input-mana
+    //pass.setFilterLimits(0.295, 0.3); //  0.1 = 10cm // input-box
+	pass.filter(*extracted_cloud);
+	*cloud_in = *extracted_cloud;
+
+	pass.setInputCloud(cloud_icp);
+	pass.filter(*extracted_cloud);
+	*cloud_icp = *extracted_cloud;
+
+	//PointCloudT::Ptr downsample_cloud = downsampleCloud(cloud_icp, 0.01);
+	cloud_in = downsampleCloud(cloud_in, 0.02);
+	cloud_icp = downsampleCloud(cloud_icp, 0.02);
+
+	//pass.setFilterLimits(0.02, 0.45);
+	//pass.setInputCloud(downsample_cloud);
+	//pass.filter(*extracted_cloud);
+	//*downsample_cloud = *extracted_cloud;
+
+	////// Defining a rotation matrix and translation vector
 	Eigen::Matrix4d transformation_matrix = Eigen::Matrix4d::Identity();
 
-	// A rotation matrix (see https://en.wikipedia.org/wiki/Rotation_matrix)
-	double theta = M_PI / 8;  // The angle of rotation in radians
-	transformation_matrix(0, 0) = cos(theta);
-	transformation_matrix(0, 1) = -sin(theta);
-	transformation_matrix(1, 0) = sin(theta);
-	transformation_matrix(1, 1) = cos(theta);
+	////// A rotation matrix (see https://en.wikipedia.org/wiki/Rotation_matrix)
+	//double theta = M_PI / 16;  // The angle of rotation in radians
+	//transformation_matrix(0, 0) = cos(theta);
+	//transformation_matrix(0, 1) = -sin(theta);
+	//transformation_matrix(1, 0) = sin(theta);
+	//transformation_matrix(1, 1) = cos(theta);
 
-	// A translation on Z axis (0.4 meters)
-	transformation_matrix(2, 3) = 0.4;
+	//// A translation on Z axis (0.4 meters)
+	//transformation_matrix(2, 3) = 0.2;
 
-	// Display in terminal the transformation matrix
-	std::cout << "Applying this rigid transformation to: cloud_in -> cloud_icp" << std::endl;
-	print4x4Matrix(transformation_matrix);
+	//// Display in terminal the transformation matrix
+	//std::cout << "Applying this rigid transformation to: cloud_in -> cloud_icp" << std::endl;
+	//print4x4Matrix(transformation_matrix);
 
-	// Executing the transformation
-	pcl::transformPointCloud(*cloud_in, *cloud_icp, transformation_matrix);
+	//// Executing the transformation
+	//pcl::transformPointCloud(*downsample_cloud, *cloud_icp, transformation_matrix);
+
+
+
 	*cloud_tr = *cloud_icp;  // We backup cloud_icp into cloud_tr for later use
+
+
 
 							 // The Iterative Closest Point algorithm
 	time.tic();
@@ -98,7 +141,6 @@ main(int argc,
 	icp.setInputSource(cloud_icp);
 	icp.setInputTarget(cloud_in);
 	icp.align(*cloud_icp);
-	icp.setMaximumIterations(1);  // We set this variable to 1 for the next time we will call .align () function
 	std::cout << "Applied " << iterations << " ICP iteration(s) in " << time.toc() << " ms" << std::endl;
 
 	if (icp.hasConverged())

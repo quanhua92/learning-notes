@@ -12,6 +12,7 @@
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/common/transforms.h>
 
 using namespace std;
 using namespace cv;
@@ -34,8 +35,8 @@ double CENTER_Y = 226.4656848780276;
 double MM_PER_M = 1000;
 int WIDTH = 640;
 int HEIGHT = 480;
-double MAX_DEPTH_THRESHOLD = 1.6;
-double MIN_DEPTH_THRESHOLD = 0.0;
+double MAX_DEPTH_THRESHOLD = 0.8;
+double MIN_DEPTH_THRESHOLD = 0.2;
 
 bool next_iteration = false;
 
@@ -109,22 +110,24 @@ void convert_to_pointclouds(PointCloudT &pointcloud, cv::Mat rgb_img, cv::Mat de
 {
 	trans_mat = trans_mat / 10 / MM_PER_M;
 
+	bool perform_matrix_transform = false;
+	PointCloudT temp;
 	for (int i = 0; i < rgb_img.rows; i++) {
 		for (int j = 0; j < rgb_img.cols; j++) {
 			double depth = double(depth_img.at<unsigned short>(i, j));
-			//depth = 100;
 			if (depth != 0 && depth / MM_PER_M < MAX_DEPTH_THRESHOLD && depth / MM_PER_M > MIN_DEPTH_THRESHOLD) {
 				Mat camPoint = Mat::zeros(3, 1, CV_64FC1);
 				camPoint.at<double>(0, 0) = (j - CENTER_X) * depth / FOCAL_X / MM_PER_M;
 				camPoint.at<double>(1, 0) = (i - CENTER_Y) * depth / FOCAL_Y / MM_PER_M;
 				camPoint.at<double>(2, 0) = double(depth) / MM_PER_M;
 
-				// Mat worldPoint = rot_mat * camPoint - rot_mat.t() * trans_mat;
-				// Mat worldPoint = rot_mat * camPoint + rot_mat.t() * trans_mat;
-				 //Mat worldPoint = camPoint + rot_mat.t() * trans_mat;
-				//Mat worldPoint = rot_mat.t() * camPoint - trans_mat;
-				Mat worldPoint = rot_mat * camPoint + trans_mat;
-				//Mat worldPoint = camPoint;
+				Mat worldPoint;
+				if (perform_matrix_transform) {
+					worldPoint = camPoint;
+				}
+				else {
+					worldPoint = rot_mat * camPoint + trans_mat;
+				}
 
 				PointT point;
 				point.x = worldPoint.at<double>(0, 0);
@@ -136,10 +139,30 @@ void convert_to_pointclouds(PointCloudT &pointcloud, cv::Mat rgb_img, cv::Mat de
 				point.g = (uint8_t)rgb[1];
 				point.r = (uint8_t)rgb[2];
 
-				pointcloud.points.push_back(point);
+				temp.points.push_back(point);
 			}
 		}
 	}
+
+	if (perform_matrix_transform) {
+		Eigen::Matrix4f transform_1 = Eigen::Matrix4f::Identity();
+		transform_1(0, 0) = rot_mat.at<double>(0, 0);
+		transform_1(0, 1) = rot_mat.at<double>(0, 1);
+		transform_1(0, 2) = rot_mat.at<double>(0, 2);
+		transform_1(1, 0) = rot_mat.at<double>(1, 0);
+		transform_1(1, 1) = rot_mat.at<double>(1, 1);
+		transform_1(1, 2) = rot_mat.at<double>(1, 2);
+		transform_1(2, 0) = rot_mat.at<double>(2, 0);
+		transform_1(2, 1) = rot_mat.at<double>(2, 1);
+		transform_1(2, 2) = rot_mat.at<double>(2, 2);
+		//    (row, column)
+		transform_1(0, 3) = trans_mat.at<double>(0, 0);
+		transform_1(1, 3) = trans_mat.at<double>(1, 0);
+		transform_1(2, 3) = trans_mat.at<double>(2, 0);
+		pcl::transformPointCloud(temp, temp, transform_1);
+	}
+
+	pointcloud += temp;
 	pointcloud.width = (uint32_t)pointcloud.points.size();
 	pointcloud.height = 1;
 }
@@ -188,6 +211,7 @@ int main(int argc,	char* argv[])
 	int i = 0;
 
 	bool perform_icp = false;
+	bool save_model = false;
 
 	time.tic();
 	while (!index.eof()) {
@@ -226,6 +250,7 @@ int main(int argc,	char* argv[])
 		}
 		i++;
 	}
+
 	std::cout << "Loading data and convert to clouds in " << time.toc() << " ms" << std::endl;
 	if (perform_icp) {
 		// filter to remove the box
@@ -240,17 +265,19 @@ int main(int argc,	char* argv[])
 		pass.filter(*cloud_icp);
 	}
 
-	// Save to ROOT_DIR\model.pcd
-	//time.tic();
-	//pcl::io::savePCDFileASCII(ROOT_DIR + "model.pcd", *cloud_in);
-	//std::cout << "Save model (" << cloud_in->points.size() << " points) to " << ROOT_DIR + "model.pcd in " << time.toc() << " ms" << std::endl;
+	if (save_model) {
+		// Save to ROOT_DIR\model.pcd
+		//time.tic();
+		//pcl::io::savePCDFileASCII(ROOT_DIR + "model.pcd", *cloud_in);
+		//std::cout << "Save model (" << cloud_in->points.size() << " points) to " << ROOT_DIR + "model.pcd in " << time.toc() << " ms" << std::endl;
 
-	//time.tic();
-	PointCloudT::Ptr cloud_down = downsampleCloud(cloud_in, 0.002);
-	pcl::io::savePCDFileASCII(ROOT_DIR + "model_down.pcd", *cloud_down);
-	std::cout << "Save down-sampled model (" << cloud_down->points.size() << " points) to " << ROOT_DIR + "model.pcd in " << time.toc() << " ms" << std::endl;
+		//time.tic();
+		PointCloudT::Ptr cloud_down = downsampleCloud(cloud_in, 0.002);
+		pcl::io::savePCDFileASCII(ROOT_DIR + "model_down.pcd", *cloud_down);
+		std::cout << "Save down-sampled model (" << cloud_down->points.size() << " points) to " << ROOT_DIR + "model.pcd in " << time.toc() << " ms" << std::endl;
 
-	//*cloud_in = *cloud_down; // visualize down sampled points
+		//*cloud_in = *cloud_down; // visualize down sampled points
+	}
 
 	if (perform_icp) {
 		// Radius filtering

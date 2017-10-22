@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/obj_io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/console/parse.h>
 #include <pcl/common/transforms.h>
@@ -29,6 +30,7 @@ int main(int argc, char** argv) {
 
 	PointCloud<PointXYZ>::Ptr source_cloud(new PointCloud<PointXYZ>());
 	if (io::loadPCDFile(argv[1], *source_cloud) < 0) {
+	//if (io::loadOBJFile("D:\\datasets\\makehuman-models\\model_001.obj", *source_cloud) < 0) {
 		cout << "Error loading " << argv[1] << endl;
 		showHelp(argv[0]);
 		system("pause");
@@ -69,6 +71,19 @@ int main(int argc, char** argv) {
 	printf("\nPoint cloud colors :  white  = original point cloud\n"
 		   "                        red  = transformed point cloud\n");
 	pcl::visualization::PCLVisualizer viewer("Matrix transformation example");
+	int v1(0);
+	viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
+	viewer.setBackgroundColor(0, 0, 0, v1);
+	viewer.addText("Radius: 0.01", 10, 10, "v1 text", v1);
+	pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZ> rgb(source_cloud);
+	viewer.addPointCloud<pcl::PointXYZ>(source_cloud, rgb, "sample cloud1", v1);
+
+	int v2(0);
+	viewer.createViewPort(0.5, 0.0, 1.0, 1.0, v2);
+	viewer.setBackgroundColor(0.3, 0.3, 0.3, v2);
+	viewer.addText("Radius: 0.1", 10, 10, "v2 text", v2);
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> single_color(source_cloud, 0, 255, 0);
+	viewer.addPointCloud<pcl::PointXYZ>(source_cloud, single_color, "sample cloud2", v2);
 
 	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> source_cloud_color_handler(source_cloud, 255, 255, 255);
 	viewer.addPointCloud(source_cloud, source_cloud_color_handler, "original_cloud");
