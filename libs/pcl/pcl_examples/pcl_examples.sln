@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26730.15
+VisualStudioVersion = 15.0.27004.2006
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "matrix_transform", "matrix_transform\matrix_transform.vcxproj", "{AC2AB010-5F41-45A0-8050-36F4689A8CB2}"
 EndProject
@@ -14,6 +14,10 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "extract_plane_from_pointclouds", "extract_plane_from_pointclouds\extract_plane_from_pointclouds.vcxproj", "{173EB9BD-9D91-44E5-8952-8D575A3BF38C}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "load_obj_file_in_high_res", "load_obj_file_in_high_res\load_obj_file_in_high_res.vcxproj", "{F17E9763-F337-4E7E-8AA6-F99E00A4E772}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pairwise_incremental_registration", "pairwise_incremental_registration\pairwise_incremental_registration.vcxproj", "{9A47A30D-994E-4AFD-9998-73AD085AE10B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pcd_viewer", "pcd_viewer\pcd_viewer.vcxproj", "{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,6 +75,22 @@ Global
 		{F17E9763-F337-4E7E-8AA6-F99E00A4E772}.Release|x64.Build.0 = Release|x64
 		{F17E9763-F337-4E7E-8AA6-F99E00A4E772}.Release|x86.ActiveCfg = Release|Win32
 		{F17E9763-F337-4E7E-8AA6-F99E00A4E772}.Release|x86.Build.0 = Release|Win32
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Debug|x64.ActiveCfg = Debug|x64
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Debug|x64.Build.0 = Debug|x64
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Debug|x86.ActiveCfg = Debug|Win32
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Debug|x86.Build.0 = Debug|Win32
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Release|x64.ActiveCfg = Release|x64
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Release|x64.Build.0 = Release|x64
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Release|x86.ActiveCfg = Release|Win32
+		{9A47A30D-994E-4AFD-9998-73AD085AE10B}.Release|x86.Build.0 = Release|Win32
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Debug|x64.ActiveCfg = Debug|x64
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Debug|x64.Build.0 = Debug|x64
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Debug|x86.ActiveCfg = Debug|Win32
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Debug|x86.Build.0 = Debug|Win32
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Release|x64.ActiveCfg = Release|x64
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Release|x64.Build.0 = Release|x64
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Release|x86.ActiveCfg = Release|Win32
+		{2E6222FE-3DD1-4ABC-9F0A-D06834C2FF38}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
