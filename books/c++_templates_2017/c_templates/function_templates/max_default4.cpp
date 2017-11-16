@@ -11,7 +11,7 @@ RT max(T1 a, T2 b) {
 }
 
 //void main() {
-void main_max4() {
+void main_max_default4() {
 	std::cout << ::max(40, 10) << std::endl; // first template
 	std::cout << ::max<long double>(5.5, 10.2) << std::endl; // second template
 
