@@ -79,6 +79,77 @@ int main(int argc, char** argv) {
 		cout << "Now v =\n" << v << endl;
 	}
 
+	{
+		// transposition and conjugation
+		MatrixXcf a = MatrixXcf::Random(2, 2);
+		cout << "Here is the matrix a\n" << a << endl;
+		cout << "Here is the matrix a^T\n" << a.transpose() << endl;
+		cout << "Here is the conjugate of a\n" << a.conjugate() << endl;
+		cout << "Here is the matrix a^*\n" << a.adjoint() << endl;
+	}
+	{
+		// transpose and adjoint return a proxy object without doing the actual transpotition
+		Matrix2i a; a << 1, 2, 3, 4;
+		cout << "a = \n" << a << endl;
+		Matrix2i b = a.transpose(); // this is ok
+		cout << "b = \n" << b << endl;
+		//a = a.transpose(); // !!! do NOT do this. This is the aliasing issue and automatically detected in debug.
+		//cout << "a doesn't change after a = a.tranpose(). a = \n" << a << endl;
+		// Should use the transposeInPlace()
+		a.transposeInPlace();
+		cout << "a.transposeInPlace() = \n" << a << endl;
+	}
+	{
+		// Matrix multiplication
+		Matrix2d mat;
+		mat << 1, 2,
+			   3, 4;
+		Vector2d u(-1, 1), v(2, 0);
+		cout << "Here is mat * mat: \n" << mat * mat << endl;
+		cout << "Here is mat * u: \n" << mat * u << endl;
+		cout << "Here is u^T * mat: \n" << u.transpose()*mat << endl;
+		cout << "Here is u^T * v: \n" << u.transpose() * v << endl;
+		cout << "Here is u * v^T: \n" << u * v.transpose() << endl;
+		cout << "Let's multiply mat by itself " << endl;
+		mat *= mat;
+		cout << "Now mat is mat: \n" << mat << endl;
+	}
+	{
+		// Dot product
+		Vector3d v(1, 2, 3);
+		Vector3d w(0, 1, 2);
+		cout << "Dot product: " << v.dot(w) << endl;
+		double dp = v.adjoint() * w;
+		cout << "Dot product via a matrix product: " << dp << endl;
+		cout << "Cross product: \n" << v.cross(w) << endl;
+	}
+
+	{
+		// basic arithmetic reduction operations
+		Eigen::Matrix2d mat;
+		mat << 1, 2, 3, 4;
+		cout << "mat = " << mat << endl;
+		cout << "mat.sum()  = " << mat.sum() << endl;
+		cout << "mat.prod() = " << mat.prod() << endl;
+		cout << "mat.mean() = " << mat.mean() << endl;
+		cout << "mat.minCoeff() = " << mat.minCoeff() << endl;
+		cout << "mat.maxCoeff() = " << mat.maxCoeff() << endl;
+		cout << "mat.trace() = " << mat.trace() << endl;
+
+		Matrix3f m = Matrix3f::Random();
+		std::ptrdiff_t i, j;
+		float minOfM = m.minCoeff(&i, &j);
+		cout << "m = \n" << m << endl;
+		cout << "minOfM = " << minOfM << " at i " << i << " j " << j << endl;
+
+		RowVector4i v = RowVector4i::Random();
+		int maxOfV = v.maxCoeff(&i);
+		cout << "v = \n" << v << endl;
+		cout << "maxOfV = " << maxOfV << " at i = " << i << endl;
+
+	}
+
+
 	system("pause");
 	return 0;
 }
