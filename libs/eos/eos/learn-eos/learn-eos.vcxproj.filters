@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="pca">
+      <UniqueIdentifier>{4b47681a-1743-4b5f-849d-474fa31da22b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="morphablemodel">
+      <UniqueIdentifier>{8f604499-c50f-47c0-b9ca-3eb0691aaa83}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fitting">
+      <UniqueIdentifier>{46dac8e3-c2b0-43a0-abbd-7676b1c2c8b9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pca\pca.h">
+      <Filter>pca</Filter>
+    </ClInclude>
+    <ClInclude Include="morphablemodel\PcaModel.h">
+      <Filter>morphablemodel</Filter>
+    </ClInclude>
+    <ClInclude Include="morphablemodel\MorphableModel.h">
+      <Filter>morphablemodel</Filter>
+    </ClInclude>
+    <ClInclude Include="fitting\fitting.h">
+      <Filter>fitting</Filter>
+    </ClInclude>
+    <ClInclude Include="fitting\linear_shape_fitting.h">
+      <Filter>fitting</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pca\pca.cpp">
+      <Filter>pca</Filter>
+    </ClCompile>
+    <ClCompile Include="pca\main.cpp" />
+  </ItemGroup>
+</Project>

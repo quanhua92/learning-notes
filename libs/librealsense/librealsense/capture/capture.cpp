@@ -27,6 +27,8 @@ int main() try {
 		Mat depth(Size(640, 480), CV_16UC1, (void*)depth_frame.get_data(), Mat::AUTO_STEP);
 		Mat ir(Size(640, 480), CV_8UC1, (void*)ir_frame.get_data(), Mat::AUTO_STEP);
 
+		cout << "depth " << depth.at<unsigned short>(240, 320) << "\r";
+
 		equalizeHist(ir, ir);
 		applyColorMap(ir, ir, COLORMAP_JET);
 
