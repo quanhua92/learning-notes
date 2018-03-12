@@ -15,13 +15,13 @@ using namespace pcl;
 //>> > b = bmesh.from_edit_mesh(bpy.context.object.data)
 //>> >[v.index for v in b.verts if v.select]
 
-int IMG_SIZE = 512;
+int IMG_SIZE = 128;
 float MM_PER_M = 1000;
 float MAX_Z = 2.5;
 float MAX_Y = 2.5;
 float CAMERA_X = 1.0;
 int NUM_OF_BINS = 20;
-bool do_visualize = true;
+bool do_visualize = false;
 
 vector<int> SELECTED_LANDMARKS = 
 {
@@ -48,7 +48,7 @@ Vec3b getBinColor(int bin, int num_bin) {
 	return color;
 }
 
-void createSegmentationMap(cv::Mat &depthImage, cv::Mat &horizontal, cv::Mat &vertical) {
+void createSegmentationMap(cv::Mat &depthImage, cv::Mat &horizontal, cv::Mat &vertical, int &left, int &top, int &bottom, int &right) {
 	double min;
 	double max;
 	cv::minMaxIdx(depthImage, &min, &max);
@@ -58,7 +58,7 @@ void createSegmentationMap(cv::Mat &depthImage, cv::Mat &horizontal, cv::Mat &ve
 	vector<Point2i> locations;
 	findNonZero(adjMap, locations);
 
-	int bottom = 0, right = 0, left = depthImage.cols, top = depthImage.rows - 1;
+	bottom = 0, right = 0, left = depthImage.cols, top = depthImage.rows - 1;
 
 	for (int i = 0; i < locations.size(); i++) {
 		int x = locations[i].x;
@@ -122,10 +122,11 @@ void createSegmentationMap(cv::Mat &depthImage, cv::Mat &horizontal, cv::Mat &ve
 	}
 }
 
-cv::Mat getDepthMap(pcl::PointCloud<pcl::PointXYZ> &cloud, pcl::PointCloud<pcl::PointXYZ> &sparse_cloud, cv::Mat &img_depth, vector<Point2f> &source_points) {
+cv::Mat getDepthMap(pcl::PointCloud<pcl::PointXYZ> &cloud, pcl::PointCloud<pcl::PointXYZ> &sparse_cloud, cv::Mat &img_depth, cv::Mat &index_map, vector<Point2f> &source_points) {
 	//int IMG_SIZE = 256;
 
 	img_depth = Mat::zeros(IMG_SIZE, IMG_SIZE, CV_16UC1);
+	index_map = Mat::zeros(IMG_SIZE, IMG_SIZE, CV_32FC1);
 
 	for (int i = 0; i < cloud.points.size(); i++) {
 		float depth_value = (CAMERA_X - cloud.points[i].x) * MM_PER_M; // convert m to mm
@@ -140,6 +141,7 @@ cv::Mat getDepthMap(pcl::PointCloud<pcl::PointXYZ> &cloud, pcl::PointCloud<pcl::
 		float current_depth_value = img_depth.at<unsigned short>(img_y, img_x);
 		if (current_depth_value == 0 || current_depth_value > depth_value) {
 			img_depth.at<unsigned short>(img_y, img_x) = depth_value;
+			index_map.at<float>(img_y, img_x) = i;
 		}
 	}
 
@@ -205,18 +207,39 @@ int main(int argc, char** argv) {
 	pcl::transformPointCloud(*mean_cloud, *mean_cloud, transform);
 	pcl::transformPointCloud(*mean_sparse_cloud, *mean_sparse_cloud, transform);
 
-	Mat mean_depth_img;
+	Mat mean_depth_img_ori;
+	Mat mean_depth_index_map_ori;
 	vector<Point2f> mean_points;
-	getDepthMap(*mean_cloud, *mean_sparse_cloud, mean_depth_img, mean_points);
+	getDepthMap(*mean_cloud, *mean_sparse_cloud, mean_depth_img_ori, mean_depth_index_map_ori, mean_points);
 
 	// DO SEGMENTATION
-	Mat horizontal, vertical;
-	createSegmentationMap(mean_depth_img, horizontal, vertical);
+	Mat horizontal_ori, vertical_ori;
+	int left, top, bottom, right;
+	createSegmentationMap(mean_depth_img_ori, horizontal_ori, vertical_ori, left, top, bottom, right);
+	Rect rect(left, top, right - left, bottom - top);
+	Mat mean_depth_img = mean_depth_img_ori(rect);
+	Mat mean_depth_index_map = mean_depth_index_map_ori(rect);
+	Mat horizontal = horizontal_ori(rect);
+	Mat vertical = vertical_ori(rect);
+	for (int i = 0; i < mean_points.size(); i++) {
+		mean_points[i] = Point2f(mean_points[i].x - left, mean_points[i].y - top);
+	}
 
+	{
+		FileStorage fs;
+		fs.open("D:\\mean_points.yml.gz", FileStorage::WRITE);
+		fs.write("mean_points", mean_points);
+		fs.write("mean_depth_index_map", mean_depth_index_map);
+		fs.write("horizontal", horizontal);
+		fs.write("vertical", vertical);
+		fs.write("mean_depth_img", mean_depth_img);
+		fs.release();
+	}
 
 	ifstream f(argv[1]);
 	string model_path;
 	while (std::getline(f, model_path)) {
+		model_path = "D:\\mhmodels_old\\models\\00240";
 		cout << "model_path: " << model_path << endl;
 
 		string dense_path = model_path + "_hd.pcd";
@@ -243,8 +266,9 @@ int main(int argc, char** argv) {
 
 		// GET DEPTH MAP
 		Mat output_depth_img;
+		Mat output_index_map;
 		vector<Point2f> source_points;
-		Mat rgb_img = getDepthMap(*source_cloud, *sparse_cloud, output_depth_img, source_points);
+		Mat rgb_img = getDepthMap(*source_cloud, *sparse_cloud, output_depth_img, output_index_map, source_points);
 
 		double min;
 		double max;
@@ -280,6 +304,27 @@ int main(int argc, char** argv) {
 		Mat output_uv_space = Mat::zeros(Size(IMG_SIZE, IMG_SIZE), CV_32FC2);
 		Mat output_seg = Mat::zeros(Size(IMG_SIZE, IMG_SIZE), CV_8UC2);
 
+		{
+			Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+			transform.translation() << 0, 1.0, 0.1;
+			pcl::transformPointCloud(*source_cloud, *source_cloud, transform);
+		}
+
+		pcl::visualization::PCLVisualizer viewer("Extract plane example");
+		float bckgr_gray_level = 0.0;  // Black
+		viewer.addCoordinateSystem(1.0, "cloud", 0);
+		viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level);
+		viewer.setCameraPosition(0.05, 0.05, 0.3, 0, 0, -1);
+		viewer.setSize(1280, 1024);  // Visualiser window size
+
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> model_cloud_color_handler(mean_cloud, 155, 155, 155);
+		viewer.addPointCloud(mean_cloud, model_cloud_color_handler, "mean_cloud");
+		viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "mean_cloud");
+
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> scan_cloud_color_handler(source_cloud, 155, 155, 155);
+		viewer.addPointCloud(source_cloud, scan_cloud_color_handler, "source_cloud");
+		int line = 0;
+
 		for (int x = 0; x < IMG_SIZE; x++) {
 			for (int y = 0; y < IMG_SIZE; y++) {
 				int depth_value = output_depth_img.at<unsigned short>(y, x);
@@ -287,14 +332,19 @@ int main(int argc, char** argv) {
 					int index = x * IMG_SIZE + y;
 					Point2f new_location = output_points.at<Point2f>(0, index);
 					if (new_location.x > 0 && new_location.y > 0 && new_location.x < IMG_SIZE && new_location.y < IMG_SIZE) {
+
+							cout << "i: " << x << " j: " << y << endl;
+							cout << "index: " << index << " x : " << new_location.x << " " << new_location.y << endl;
+
+
 						int h_bin = horizontal.at<char>(int(new_location.y), int(new_location.x));
 						int v_bin = vertical.at<char>(int(new_location.y), int(new_location.x));
 
 						Vec2f uv_space;
 						Vec2b seg_id;
 
-						uv_space[0] = new_location.x * 1.0 / IMG_SIZE;
-						uv_space[1] = new_location.y * 1.0 / IMG_SIZE;
+						uv_space[0] = new_location.x * 1.0 / mean_depth_img.cols;
+						uv_space[1] = new_location.y * 1.0 / mean_depth_img.rows;
 						seg_id[0] = h_bin;
 						seg_id[1] = v_bin;
 
@@ -318,7 +368,24 @@ int main(int argc, char** argv) {
 							if (v_bin > 0) {
 								rgb_img_ver.at<Vec3b>(y, x) = getBinColor(v_bin, NUM_OF_BINS);
 							}
+
+
 						}
+						int scan_index = int(output_index_map.at<float>(y, x));
+						int model_index = int(mean_depth_index_map.at<float>(int(new_location.y), int(new_location.x)));
+
+						if (scan_index > 0 && model_index > 0) {
+							stringstream ss;
+							ss << "line: " << line++;
+							cout << "model_index: " << model_index << " scan_index: " << scan_index << endl;
+							viewer.addLine(source_cloud->points[scan_index], mean_cloud->points[model_index], ss.str());
+
+							//while (!viewer.wasStopped()) { // Display the visualiser until 'q' key is pressed
+							//	viewer.spinOnce();
+							//}
+						}
+
+
 					}
 				}
 			}
@@ -328,6 +395,7 @@ int main(int argc, char** argv) {
 		FileStorage fs;
 		fs.open(storage_path, FileStorage::WRITE);
 		fs.write("depth_img", output_depth_img);
+		fs.write("index_map", output_index_map);
 		fs.write("uv_space", output_uv_space);
 		fs.write("segmentation", output_seg);
 		fs.release();
@@ -342,9 +410,35 @@ int main(int argc, char** argv) {
 			cv::waitKey(0);
 		}
 
-		//
+
+		// Visualization
+
+		// DRAW CORRES
+		//{
+		//	int line = 0;
+		//	for (int i = 0; i < output_index_map.cols; i++) {
+		//		for (int j = 0; j < output_index_map.rows; j++) {
+		//			unsigned short scan_index = output_index_map.at<unsigned short>(j, i);
+		//			int index = i * IMG_SIZE + j;
+		//			Point2f new_location = output_points.at<Point2f>(0, index);
+		//			if (new_location.x > 0 && new_location.y > 0) {
+		//				cout << "i: " << i << " j: " << j << endl;
+		//				cout << "index: " << index << " x : " << new_location.x << " " << new_location.y << endl;
+		//			}
+		//			unsigned short model_index = mean_depth_index_map.at<unsigned short>(int(new_location.y), int(new_location.x));
+
+		//			if (scan_index > 0 && model_index > 0) {
+		//				stringstream ss;
+		//				ss << "line: " << line++;
+		//				viewer.addLine(source_cloud->points[scan_index], mean_cloud->points[model_index], ss.str());
+		//			}
+		//		}
+		//	}
+		//}
+
+
 		//// Visualization
-		//pcl::visualization::PCLVisualizer viewer("Extract plane example");
+		
 		//int v1(0);
 		//int v2(1);
 		//viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
@@ -366,9 +460,9 @@ int main(int argc, char** argv) {
 
 		//viewer.setSize(1280, 1024);  // Visualiser window size
 
-		//while (!viewer.wasStopped()) { // Display the visualiser until 'q' key is pressed
-		//	viewer.spinOnce();
-		//}
+		while (!viewer.wasStopped()) { // Display the visualiser until 'q' key is pressed
+			viewer.spinOnce();
+		}
 
 	} // end while getline()
 
