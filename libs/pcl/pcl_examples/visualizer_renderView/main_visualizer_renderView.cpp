@@ -20,6 +20,7 @@
 #include <vtkPNGWriter.h>
 #include <pcl/visualization/range_image_visualizer.h>
 #include <thread>
+#include <pcl/filters/radius_outlier_removal.h>
 using namespace cv;
 using namespace std;
 using namespace pcl;
@@ -33,6 +34,29 @@ void showHelp(char * program_name) {
 	cout << "DO_VISUALIZATION: 1 -> display PCL visualizer. 0 -> do not display" << endl;
 	cout << "Example: " << program_name << " filename.txt 1" << endl;
 	cout << "-h: Show this help." << endl;
+}
+
+PointCloud<PointXYZ>::Ptr downsampleCloud(PointCloud<PointXYZ>::Ptr inputCloud, double voxel_size)
+{
+	PointCloud<PointXYZ>::Ptr cloud_filtered(new PointCloud<PointXYZ>);
+	pcl::VoxelGrid<PointXYZ> downsampler;
+	downsampler.setInputCloud(inputCloud);
+	downsampler.setLeafSize(voxel_size, voxel_size, voxel_size);
+	downsampler.filter(*cloud_filtered);
+	return cloud_filtered;
+}
+
+PointCloud<PointXYZ>::Ptr noiseFiltering(PointCloud<PointXYZ>::Ptr inputCloud, int neighbors) {
+	PointCloud<PointXYZ>::Ptr cloud_filtered(new PointCloud<PointXYZ>);
+
+	pcl::RadiusOutlierRemoval<PointXYZ> outrem;
+	// build the filter
+	outrem.setInputCloud(inputCloud);
+	outrem.setRadiusSearch(0.01);
+	outrem.setMinNeighborsInRadius(neighbors);
+	// apply filter
+	outrem.filter(*cloud_filtered);
+	return cloud_filtered;
 }
 
 /** \brief Convert a \ref RangeImagePlanar object to a OpenCV Mat
@@ -54,17 +78,35 @@ void convertRangeImagetoMat(cv::Mat &outputImage, const pcl::RangeImagePlanar& r
 }
 
 void loadOBJinHighRes(string fileName, PointCloud<PointXYZ>::Ptr source_cloud, int detailLevel = 1) {
-	// load in high res
-	vtkSmartPointer<vtkPolyData> polydata1;
-	vtkSmartPointer<vtkOBJReader> readerQuery = vtkSmartPointer<vtkOBJReader>::New();
-	readerQuery->SetFileName(fileName.c_str());
-	readerQuery->Update();
-	polydata1 = readerQuery->GetOutput();
-	//// polydata1->Update(); // this is not available now
 	visualization::PCLVisualizer viewer;
 	viewer.setShowFPS(false);
-	viewer.addModelFromPolyData(polydata1, "mesh", 0);
-	viewer.setRepresentationToSurfaceForAllActors();
+	// Load sparse & dense data
+	PointCloud<PointXYZ>::Ptr sparse_cloud(new PointCloud<PointXYZ>());
+
+	string pcd = "pcd";
+	if (fileName.find(pcd) != std::string::npos) {
+		// found pcd
+		pcl::io::loadPCDFile(fileName, *sparse_cloud);
+
+		sparse_cloud = noiseFiltering(downsampleCloud(sparse_cloud, 0.005), 20);
+
+		viewer.addPointCloud(sparse_cloud, "mesh");
+	}
+	else {
+		vtkSmartPointer<vtkPolyData> polydata1;
+		vtkSmartPointer<vtkOBJReader> readerQuery = vtkSmartPointer<vtkOBJReader>::New();
+		readerQuery->SetFileName(fileName.c_str());
+		readerQuery->Update();
+		polydata1 = readerQuery->GetOutput();
+		viewer.addModelFromPolyData(polydata1, "mesh", 0);
+		viewer.setRepresentationToSurfaceForAllActors();
+
+		// load sparse cloud
+		pcl::PCLPointCloud2 obj_cloud_ori;
+		io::loadOBJFile(fileName, obj_cloud_ori);
+		pcl::fromPCLPointCloud2(obj_cloud_ori, *sparse_cloud);
+	}
+	//// polydata1->Update(); // this is not available now
 
 	viewer.setCameraPosition(0.0, 1.0, 5, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0);
 	viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Setting background to a dark grey
@@ -79,11 +121,6 @@ void loadOBJinHighRes(string fileName, PointCloud<PointXYZ>::Ptr source_cloud, i
 	transform.rotate(Eigen::AngleAxisf(+M_PI, Eigen::Vector3f::UnitY()));
 	transformPointCloud(*frontal_cloud, *frontal_cloud, transform);
 
-	PointCloud<PointXYZ>::Ptr sparse_cloud(new PointCloud<PointXYZ>());
-	pcl::PCLPointCloud2 obj_cloud_ori;
-	io::loadOBJFile(fileName, obj_cloud_ori);
-	pcl::fromPCLPointCloud2(obj_cloud_ori, *sparse_cloud);
-
 	transform.setIdentity();
 	transform.rotate(Eigen::AngleAxisf(+M_PI/2, Eigen::Vector3f::UnitZ()));
 	transformPointCloud(*frontal_cloud, *frontal_cloud, transform);
@@ -94,12 +131,12 @@ void loadOBJinHighRes(string fileName, PointCloud<PointXYZ>::Ptr source_cloud, i
 	transformPointCloud(*sparse_cloud, *sparse_cloud, transform);
 	transform.setIdentity();
 
-	viewer.removePolygonMesh("mesh");
 	viewer.removePointCloud("mesh");
 	viewer.removeShape("mesh");
 	viewer.addCoordinateSystem(1.0);
 	viewer.addPointCloud(sparse_cloud, "sparse_cloud");
-	viewer.addPointCloud(frontal_cloud, "frontal_cloud");
+	pcl::visualization::PointCloudColorHandlerCustom<PointXYZ> frontal_cloud_ch(frontal_cloud, 255, 0, 0);
+	viewer.addPointCloud(frontal_cloud, frontal_cloud_ch, "frontal_cloud");
 
 	// We now want to create a range image from the above point cloud, with a 1deg angular resolution
 	float angularResolution = (float)(0.1f * (M_PI / 180.0f));  //   1.0 degree in radians
@@ -111,7 +148,7 @@ void loadOBJinHighRes(string fileName, PointCloud<PointXYZ>::Ptr source_cloud, i
 	cout << sensorPose.matrix() << endl;
 
 	pcl::RangeImage::CoordinateFrame coordinate_frame = pcl::RangeImage::CAMERA_FRAME;
-	float noiseLevel = 0.00;
+	float noiseLevel = 0.05;
 	float minRange = 0.0f;
 	int borderSize = 1;
 
@@ -191,7 +228,16 @@ void loadOBJinHighRes(string fileName, PointCloud<PointXYZ>::Ptr source_cloud, i
 void processOBJFile(string LINE, bool useLowRes, bool doVisualization, int detailLevel = 1, int BOARD_HEIGHT = 800, int BOARD_WIDTH = 1200) {
 	PointCloud<PointXYZ>::Ptr source_cloud(new PointCloud<PointXYZ>());
 
-	string obj_file_path = LINE + ".obj";
+	string obj_file_path;
+	string pcd = "pcd";
+	if (LINE.find(pcd) != std::string::npos) {
+		// found pcd	
+		obj_file_path = LINE;
+	}
+	else {
+		obj_file_path = LINE + ".obj";
+	}
+	
 	string pcd_file_path = LINE + ".pcd";
 
 	if (useLowRes == false) {
