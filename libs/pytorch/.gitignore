@@ -1,6 +1,7 @@
 .vscode
 .idea
 
+CIFAR10_data
 MNIST_data
 FashionMNIST_data
 checkpoint.pth
